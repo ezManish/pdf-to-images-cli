@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf-to-images-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "High-performance PDF page to image converter with CLI, parallel rendering, and FastAPI web microservice."
 readme = "README.md"
 authors = [{ name = "Pdf2Pix Developer" }]
