@@ -318,11 +318,49 @@ def _combine_png_bytes(
     return out_path
 
 
+GUIDE_TEXT = """======================================================================
+pdf-to-images-cli User Guide & Feature Reference
+======================================================================
+
+Command Executable: pdf-to-image (or pdf2pix)
+
+BASIC USAGE:
+  pdf-to-image document.pdf
+    Converts all pages of document.pdf to PNG at 200 DPI into output/document/
+
+COMMON CLI EXAMPLES:
+  pdf-to-image document.pdf -f jpg -d 300 -q 95
+    Export pages as high-quality JPEGs at 300 DPI (quality rating 95).
+
+  pdf-to-image document.pdf --pages "1,3,5-10"
+    Render only specific pages (1, 3, and 5 through 10).
+
+  pdf-to-image document.pdf --workers 8 --progress
+    Accelerate rendering using 8 parallel process workers.
+
+  pdf-to-image document.pdf --combine --format webp
+    Stack all pages vertically into a single contiguous image.
+
+  pdf-to-image document.pdf --grayscale --optimize
+    Render pages in grayscale with extra image compression.
+
+FASTAPI SAAS MICROSERVICE:
+  uvicorn api:app --reload --port 8000
+    Launches REST API backend. Interactive docs at http://localhost:8000/docs
+
+PYTHON MODULE IMPORT:
+  from pdf_to_image import pdf_to_images
+  paths = pdf_to_images("document.pdf", fmt="png", dpi=200, workers=4)
+
+======================================================================
+"""
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Convert PDF pages to images (PNG, JPG, WEBP, TIFF, ...).",
     )
-    parser.add_argument("pdf", help="Path to the input PDF file")
+    parser.add_argument("pdf", nargs="?", default=None, help="Path to the input PDF file")
     parser.add_argument("-f", "--format", default="png", help="Output format. Default: png")
     parser.add_argument("-d", "--dpi", type=int, default=200, help="Render DPI. Default: 200")
     parser.add_argument("-o", "--output-dir", default=None, help="Output directory")
@@ -337,12 +375,21 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Parallel render processes. Only helps for large/high-DPI PDFs. Default: 1",
     )
     parser.add_argument("--progress", action="store_true", help="Print progress while converting")
+    parser.add_argument("--guide", "--examples", action="store_true", help="Print detailed CLI user guide and examples")
     return parser
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
+
+    if args.guide:
+        print(GUIDE_TEXT)
+        return 0
+
+    if not args.pdf:
+        parser.print_help()
+        return 1
 
     start_time = time.perf_counter()
     try:
