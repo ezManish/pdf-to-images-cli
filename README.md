@@ -281,6 +281,11 @@ Pdf2Pix/
 
 ---
 
-## License
+## License & PyMuPDF AGPL Compliance
 
-Distributed under the MIT License. See `LICENSE` for details.
+Distributed under the **MIT License**. See `LICENSE` for details.
+
+> [!IMPORTANT]
+> **PyMuPDF (fitz) Licensing Notice**:
+> `pdf-to-images-cli` depends on PyMuPDF, which is dual-licensed under **GNU AGPL 3.0** and commercial licenses by Artifex Software, Inc.
+> - Any downstream developer or enterprise incorporating this project into closed-source or commercial applications must either adhere to AGPL 3.0 source-disclosure requirements or acquire a commercial PyMuPDF license from Artifex.

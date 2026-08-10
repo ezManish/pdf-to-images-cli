@@ -1,4 +1,11 @@
-================================================================================
+"""
+guide_text.py
+
+User Guide & Architectural Reference text for pdf-to-images-cli.
+Bundled directly as a Python module to guarantee wheel archive distribution.
+"""
+
+GUIDE_TEXT = """================================================================================
 pdf-to-images-cli Complete User Guide & Architectural Reference
 ================================================================================
 
@@ -126,3 +133,4 @@ OVERVIEW:
   combined = pdf_to_images("document.pdf", combine=True, fmt="jpg")
 
 ================================================================================
+"""

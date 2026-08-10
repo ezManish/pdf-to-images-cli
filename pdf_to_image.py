@@ -36,6 +36,67 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 import pymupdf  # PyMuPDF
+from guide_text import GUIDE_TEXT
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = _build_arg_parser()
+    args = parser.parse_args(argv)
+
+    if args.guide:
+        print(GUIDE_TEXT)
+        return 0
+
+    if not args.pdf:
+        parser.print_help()
+        return 1
+
+    start_time = time.perf_counter()
+    try:
+        result = pdf_to_images(
+            pdf_path=args.pdf,
+            output_dir=args.output_dir,
+            fmt=args.format,
+            dpi=args.dpi,
+            pages=args.pages,
+            combine=args.combine,
+            prefix=args.prefix,
+            quality=args.quality,
+            grayscale=args.grayscale,
+            optimize=args.optimize,
+            workers=args.workers,
+            show_progress=args.progress,
+        )
+    except FileNotFoundError as exc:
+        print(f"Error [File Not Found]: {exc}", file=sys.stderr)
+        return 10
+    except ValueError as exc:
+        err_msg = str(exc)
+        if "encrypted" in err_msg.lower() or "password" in err_msg.lower():
+            print(f"Error [Encrypted PDF]: {exc}", file=sys.stderr)
+            return 11
+        print(f"Error [Validation Error]: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error [Unexpected Failure]: {exc}", file=sys.stderr)
+        return 99
+
+    elapsed = time.perf_counter() - start_time
+
+    if isinstance(result, list):
+        count = len(result)
+        rate = count / elapsed if elapsed > 0 else 0
+        print(f"Wrote {count} image(s) in {elapsed:.2f}s ({rate:.1f} pages/sec):")
+        for p in result:
+            print(f"  {p}")
+    else:
+        print(f"Wrote combined image in {elapsed:.2f}s: {result}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 
 SUPPORTED_FORMATS = {"png", "jpg", "jpeg", "ppm", "pgm", "pbm", "pam"}
 PILLOW_FALLBACK_FORMATS = {"webp", "tiff", "tif", "bmp", "gif"}
@@ -464,9 +525,19 @@ def main(argv: Optional[List[str]] = None) -> int:
             workers=args.workers,
             show_progress=args.progress,
         )
-    except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+    except FileNotFoundError as exc:
+        print(f"Error [File Not Found]: {exc}", file=sys.stderr)
+        return 10
+    except ValueError as exc:
+        err_msg = str(exc)
+        if "encrypted" in err_msg.lower() or "password" in err_msg.lower():
+            print(f"Error [Encrypted PDF]: {exc}", file=sys.stderr)
+            return 11
+        print(f"Error [Validation Error]: {exc}", file=sys.stderr)
         return 1
+    except Exception as exc:
+        print(f"Error [Unexpected Failure]: {exc}", file=sys.stderr)
+        return 99
 
     elapsed = time.perf_counter() - start_time
 

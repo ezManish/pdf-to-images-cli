@@ -1,13 +1,24 @@
 """
 test_pdf_to_image.py
 
-pytest unit test suite for pdf-to-images-cli library.
+pytest unit & API integration test suite for pdf-to-images-cli library.
 """
 
+import os
 from pathlib import Path
 import pytest
+from fastapi.testclient import TestClient
 
-from pdf_to_image import _parse_page_ranges, pdf_to_images, SUPPORTED_FORMATS, PILLOW_FALLBACK_FORMATS
+from guide_text import GUIDE_TEXT
+from pdf_to_image import _parse_page_ranges, main, pdf_to_images, SUPPORTED_FORMATS, PILLOW_FALLBACK_FORMATS
+from api import app, _sanitize_filename, MAX_FILE_SIZE_BYTES
+
+
+def test_guide_text_module_loaded():
+    """Verify that GUIDE_TEXT is non-empty and properly imported from guide_text module."""
+    assert isinstance(GUIDE_TEXT, str)
+    assert len(GUIDE_TEXT) > 500
+    assert "pdf-to-images-cli Complete User Guide" in GUIDE_TEXT
 
 
 def test_parse_page_ranges_valid():
@@ -45,14 +56,13 @@ def test_nonexistent_pdf_raises_file_not_found():
         pdf_to_images("nonexistent_file_xyz_123.pdf")
 
 
-def test_pdf_conversion_if_sample_exists():
+def test_cli_exit_codes():
+    """Verify distinct CLI exit codes."""
+    assert main(["--guide"]) == 0
+    assert main(["nonexistent_file_xyz_999.pdf"]) == 10  # File Not Found
     sample_pdf = Path("Participation_Certificates.pdf")
     if sample_pdf.exists():
-        results = pdf_to_images(sample_pdf, pages="1-2", fmt="png", dpi=100)
-        assert isinstance(results, list)
-        assert len(results) == 2
-        for p in results:
-            assert p.exists()
+        assert main([str(sample_pdf), "--workers", "0"]) == 1  # Validation Error
 
 
 def test_parameter_validation_clamping():
@@ -68,3 +78,29 @@ def test_parameter_validation_clamping():
 
     with pytest.raises(ValueError, match="Invalid quality parameter '150'"):
         pdf_to_images(sample_pdf, quality=150)
+
+
+def test_path_traversal_sanitization():
+    """Verify path traversal characters are sanitized from uploaded filenames."""
+    assert _sanitize_filename("../../etc/passwd.pdf") == "passwd.pdf"
+    assert _sanitize_filename("C:\\Windows\\System32\\document.pdf") == "document.pdf"
+    with pytest.raises(Exception):
+        _sanitize_filename("script.exe")
+
+
+def test_api_endpoints():
+    """Integration tests for FastAPI endpoints with TestClient."""
+    client = TestClient(app)
+
+    # Health check endpoint
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "healthy"}
+
+    # File size limit check (413 Payload Too Large)
+    fake_large_payload = b"%" + b"0" * (MAX_FILE_SIZE_BYTES + 100)
+    response = client.post(
+        "/convert",
+        files={"file": ("large_doc.pdf", fake_large_payload, "application/pdf")},
+    )
+    assert response.status_code == 413

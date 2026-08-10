@@ -12,13 +12,15 @@ from __future__ import annotations
 
 import base64
 import os
+import secrets
 import shutil
 import tempfile
 import zipfile
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -42,6 +44,7 @@ app.add_middleware(
 )
 
 MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB Limit
+API_KEY_ENV = os.environ.get("PDF2PIX_API_KEY")
 
 
 def _cleanup_temp_file(path: Path) -> None:
@@ -51,6 +54,16 @@ def _cleanup_temp_file(path: Path) -> None:
             path.unlink()
     except Exception:
         pass
+
+
+def _verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
+    """Validate API key using constant-time comparison when PDF2PIX_API_KEY environment variable is set."""
+    if API_KEY_ENV is not None:
+        if not x_api_key or not secrets.compare_digest(x_api_key, API_KEY_ENV):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing API key header (X-API-Key).",
+            )
 
 
 def _sanitize_filename(raw_filename: Optional[str]) -> str:
@@ -85,7 +98,7 @@ def health_check():
     return {"status": "healthy"}
 
 
-@app.post("/convert", tags=["Conversion"])
+@app.post("/convert", tags=["Conversion"], dependencies=[Depends(_verify_api_key)])
 async def convert_pdf_endpoint(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF file to convert"),
@@ -124,7 +137,8 @@ async def convert_pdf_endpoint(
         output_folder.mkdir(exist_ok=True)
 
         try:
-            results = pdf_to_images(
+            results = await run_in_threadpool(
+                pdf_to_images,
                 pdf_path=pdf_input_path,
                 output_dir=output_folder,
                 fmt=format,
@@ -173,13 +187,14 @@ async def convert_pdf_endpoint(
         )
 
 
-@app.post("/convert/json", tags=["Conversion"])
+@app.post("/convert/json", tags=["Conversion"], dependencies=[Depends(_verify_api_key)])
 async def convert_pdf_json_endpoint(
     file: UploadFile = File(..., description="PDF file to convert"),
     format: str = Form("png", description="Output format"),
     dpi: int = Form(150, description="DPI resolution"),
     pages: Optional[str] = Form(None, description="Page spec e.g. '1-3'"),
     combine: bool = Form(False, description="Combine into single vertical image"),
+    quality: int = Form(90, description="JPEG quality (1 to 100)"),
     grayscale: bool = Form(False, description="Grayscale rendering"),
     workers: int = Form(4, description="Parallel worker processes"),
 ):
@@ -190,6 +205,7 @@ async def convert_pdf_json_endpoint(
     safe_filename = _sanitize_filename(file.filename)
     dpi = _clamp_integer(dpi, 36, 600)
     workers = _clamp_integer(workers, 1, 16)
+    quality = _clamp_integer(quality, 1, 100)
 
     content = await file.read()
     if len(content) > MAX_FILE_SIZE_BYTES:
@@ -209,13 +225,15 @@ async def convert_pdf_json_endpoint(
         output_folder.mkdir(exist_ok=True)
 
         try:
-            results = pdf_to_images(
+            results = await run_in_threadpool(
+                pdf_to_images,
                 pdf_path=pdf_input_path,
                 output_dir=output_folder,
                 fmt=format,
                 dpi=dpi,
                 pages=pages,
                 combine=combine,
+                quality=quality,
                 grayscale=grayscale,
                 workers=workers,
             )
