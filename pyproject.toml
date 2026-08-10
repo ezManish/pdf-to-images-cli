@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf-to-images-cli"
+version = "0.1.0"
+description = "High-performance PDF page to image converter with CLI, parallel rendering, and FastAPI web microservice."
+readme = "README.md"
+authors = [{ name = "Pdf2Pix Developer" }]
+license = "MIT"
+requires-python = ">=3.8"
+keywords = ["pdf", "image", "converter", "pymupdf", "fitz", "fastapi", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "pymupdf>=1.23.0",
+    "pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+    "python-multipart>=0.0.6",
+]
+all = [
+    "pdf-to-images-cli[api]",
+]
+
+[project.scripts]
+pdf-to-image = "pdf_to_image:main"
+pdf2pix = "pdf_to_image:main"
+
+[tool.setuptools]
+py-modules = ["pdf_to_image", "api", "benchmark"]

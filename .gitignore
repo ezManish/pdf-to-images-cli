@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Build and distribution artifacts
+build/
+dist/
+*.egg-info/
+
+# Output directories and temp archives
+output/
+*.zip
+*.pdf
+benchmark_results.json
+
+# IDE configuration
+.vscode/
+.idea/
