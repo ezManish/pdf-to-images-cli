@@ -236,8 +236,8 @@ CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
 Build and launch container:
 
 ```bash
-docker build -t pdf2pix-api .
-docker run -d -p 8000:8000 pdf2pix-api
+docker build -t pdf-to-images-api .
+docker run -d -p 8000:8000 pdf-to-images-api
 ```
 
 ---
@@ -274,7 +274,7 @@ options:
 ## Repository Structure
 
 ```text
-Pdf2Pix/
+pdf-to-images-cli/
 ├── pdf_to_image.py     # Core conversion library & CLI entrypoint
 ├── api.py              # FastAPI microservice & REST endpoints
 ├── guide_text.py       # Documentation guide Python module

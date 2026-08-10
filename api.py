@@ -27,9 +27,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from pdf_to_image import pdf_to_images
 
 app = FastAPI(
-    title="Pdf2Pix Conversion API",
+    title="pdf-to-images-cli REST API",
     description="High-Performance PDF Page to Image Conversion REST Microservice",
-    version="1.0.0",
+    version="1.0.3",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -44,7 +44,7 @@ app.add_middleware(
 )
 
 MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB Limit
-API_KEY_ENV = os.environ.get("PDF2PIX_API_KEY")
+API_KEY_ENV = os.environ.get("PDF_TO_IMAGES_API_KEY")
 
 
 def _cleanup_temp_file(path: Path) -> None:
@@ -57,7 +57,7 @@ def _cleanup_temp_file(path: Path) -> None:
 
 
 def _verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
-    """Validate API key using constant-time comparison when PDF2PIX_API_KEY environment variable is set."""
+    """Validate API key using constant-time comparison when PDF_TO_IMAGES_API_KEY environment variable is set."""
     if API_KEY_ENV is not None:
         if not x_api_key or not secrets.compare_digest(x_api_key, API_KEY_ENV):
             raise HTTPException(
@@ -86,8 +86,8 @@ def _clamp_integer(val: int, min_val: int, max_val: int) -> int:
 def read_root():
     """Root endpoint returning API service status and links to docs."""
     return {
-        "service": "Pdf2Pix Conversion API",
-        "version": "1.0.0",
+        "service": "pdf-to-images-cli REST API",
+        "version": "1.0.3",
         "docs": "/docs",
         "status": "operational",
     }
