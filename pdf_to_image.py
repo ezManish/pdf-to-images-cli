@@ -39,6 +39,8 @@ import pymupdf  # PyMuPDF
 from guide_text import GUIDE_TEXT
 
 
+__version__ = "1.0.1"
+
 SUPPORTED_FORMATS = {"png", "jpg", "jpeg", "ppm", "pgm", "pbm", "pam"}
 PILLOW_FALLBACK_FORMATS = {"webp", "tiff", "tif", "bmp", "gif"}
 ALPHA_CAPABLE_FORMATS = {"png", "webp", "tiff", "tif"}
@@ -410,6 +412,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--progress", action="store_true", help="Print real-time page conversion progress to stderr")
     parser.add_argument("--guide", "--examples", action="store_true", help="Display the complete interactive CLI user guide and feature reference")
+    parser.add_argument("-v", "--version", action="version", version=f"pdf-to-images-cli {__version__}")
     return parser
 
 

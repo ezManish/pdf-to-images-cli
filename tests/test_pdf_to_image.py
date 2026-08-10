@@ -65,6 +65,15 @@ def test_cli_exit_codes():
         assert main([str(sample_pdf), "--workers", "0"]) == 1  # Validation Error
 
 
+def test_cli_version_flag(capsys):
+    """Verify -v and --version display correct version string."""
+    with pytest.raises(SystemExit) as exc:
+        main(["--version"])
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    assert "pdf-to-images-cli 1.0.1" in captured.out or "pdf-to-images-cli 1.0.1" in captured.err
+
+
 def test_parameter_validation_clamping():
     sample_pdf = Path("Participation_Certificates.pdf")
     if not sample_pdf.exists():
