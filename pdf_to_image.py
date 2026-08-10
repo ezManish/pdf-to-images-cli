@@ -154,9 +154,21 @@ def _render_and_bytes_worker(
         doc.close()
 
 
+def _validate_and_clamp_params(dpi: int, workers: int, quality: int) -> tuple[int, int, int]:
+    """Validate and clamp numeric parameters to safe operational bounds across CLI, Module, and REST API."""
+    if not isinstance(dpi, int) or dpi < 36 or dpi > 600:
+        raise ValueError(f"Invalid DPI parameter '{dpi}': must be an integer between 36 and 600")
+    if not isinstance(workers, int) or workers < 1:
+        raise ValueError(f"Invalid workers count '{workers}': must be an integer >= 1")
+    workers = min(workers, 16)
+    if not isinstance(quality, int) or quality < 1 or quality > 100:
+        raise ValueError(f"Invalid quality parameter '{quality}': must be an integer between 1 and 100")
+    return dpi, workers, quality
+
+
 def pdf_to_images(
     pdf_path: Union[str, Path],
-    output_dir: Union[str, Path, None] = None,
+    output_dir: Optional[Union[str, Path]] = None,
     fmt: str = "png",
     dpi: int = 200,
     pages: Optional[str] = None,
@@ -190,6 +202,8 @@ def pdf_to_images(
     Returns:
         A list of Paths (one per page) if combine=False, or a single Path if combine=True.
     """
+    dpi, workers, quality = _validate_and_clamp_params(dpi, workers, quality)
+
     pdf_path = Path(pdf_path)
     if not pdf_path.is_file():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")

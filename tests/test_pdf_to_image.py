@@ -53,3 +53,18 @@ def test_pdf_conversion_if_sample_exists():
         assert len(results) == 2
         for p in results:
             assert p.exists()
+
+
+def test_parameter_validation_clamping():
+    sample_pdf = Path("Participation_Certificates.pdf")
+    if not sample_pdf.exists():
+        return
+
+    with pytest.raises(ValueError, match="Invalid workers count '0'"):
+        pdf_to_images(sample_pdf, workers=0)
+
+    with pytest.raises(ValueError, match="Invalid DPI parameter '-50'"):
+        pdf_to_images(sample_pdf, dpi=-50)
+
+    with pytest.raises(ValueError, match="Invalid quality parameter '150'"):
+        pdf_to_images(sample_pdf, quality=150)
