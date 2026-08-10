@@ -1,0 +1,10 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+dist/
+output/
+.pytest_cache/
+.vscode/
