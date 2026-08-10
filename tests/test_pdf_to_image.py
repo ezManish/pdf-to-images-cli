@@ -97,6 +97,11 @@ def test_api_endpoints():
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
 
+    # Root endpoint
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json()["status"] == "operational"
+
     # File size limit check (413 Payload Too Large)
     fake_large_payload = b"%" + b"0" * (MAX_FILE_SIZE_BYTES + 100)
     response = client.post(
@@ -104,3 +109,42 @@ def test_api_endpoints():
         files={"file": ("large_doc.pdf", fake_large_payload, "application/pdf")},
     )
     assert response.status_code == 413
+
+
+def test_combine_and_grayscale_rendering():
+    """Test combine mode and grayscale rendering functionality."""
+    sample_pdf = Path("Participation_Certificates.pdf")
+    if not sample_pdf.exists():
+        return
+
+    # Test combine mode
+    combined_result = pdf_to_images(sample_pdf, pages="1-2", combine=True, fmt="png")
+    assert isinstance(combined_result, Path)
+    assert combined_result.exists()
+    assert "_combined" in combined_result.name
+
+    # Test grayscale rendering
+    grayscale_results = pdf_to_images(sample_pdf, pages="1", grayscale=True, fmt="png")
+    assert isinstance(grayscale_results, list)
+    assert len(grayscale_results) == 1
+    assert grayscale_results[0].exists()
+
+
+def test_api_key_auth_verification(monkeypatch):
+    """Test X-API-Key security header enforcement."""
+    client = TestClient(app)
+    
+    # Set API key requirement
+    monkeypatch.setattr("api.API_KEY_ENV", "secret-test-key-123")
+
+    # Missing header -> 401 Unauthorized
+    response = client.post("/convert", files={"file": ("test.pdf", b"%PDF-1.4", "application/pdf")})
+    assert response.status_code == 401
+
+    # Invalid header -> 401 Unauthorized
+    response = client.post(
+        "/convert",
+        headers={"X-API-Key": "wrong-key"},
+        files={"file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
+    )
+    assert response.status_code == 401

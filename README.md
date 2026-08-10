@@ -244,8 +244,8 @@ docker run -d -p 8000:8000 pdf2pix-api
 ```text
 usage: pdf-to-image [-h] [-f FORMAT] [-d DPI] [-o OUTPUT_DIR] [-p PAGES] [-c]
                     [--prefix PREFIX] [-q QUALITY] [-g] [--optimize]
-                    [-w WORKERS] [--progress]
-                    pdf
+                    [-w WORKERS] [--progress] [--guide]
+                    [pdf]
 
 positional arguments:
   pdf                   Path to the input PDF file
@@ -263,6 +263,7 @@ options:
   --optimize            Enable additional image compression algorithms
   -w, --workers WORKERS Number of parallel worker processes. Default: 1
   --progress            Print real-time progress to stderr
+  --guide, --examples   Display the complete interactive CLI user guide
 ```
 
 ---
@@ -273,9 +274,11 @@ options:
 Pdf2Pix/
 ├── pdf_to_image.py     # Core conversion library & CLI entrypoint
 ├── api.py              # FastAPI microservice & REST endpoints
+├── guide_text.py       # Documentation guide Python module
 ├── benchmark.py        # Performance benchmarking utility
 ├── pyproject.toml      # Package setup & entrypoint configuration
-├── README.md           # Documentation
+├── README.md           # Documentation & license guide
+├── tests/              # PyTest automated unit & integration test suite
 └── output/             # Generated output directory
 ```
 

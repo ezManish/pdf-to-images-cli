@@ -162,9 +162,11 @@ async def convert_pdf_endpoint(
             shutil.copy(results, persistent_img)
             background_tasks.add_task(_cleanup_temp_file, persistent_img)
 
+            fmt_lower = format.lower()
+            media_type = "image/jpeg" if fmt_lower in ("jpg", "jpeg") else f"image/{fmt_lower}"
             return FileResponse(
                 path=persistent_img,
-                media_type=f"image/{format.lower()}",
+                media_type=media_type,
                 filename=results.name,
             )
 
@@ -197,6 +199,7 @@ async def convert_pdf_json_endpoint(
     combine: bool = Form(False, description="Combine into single vertical image"),
     quality: int = Form(90, description="JPEG quality (1 to 100)"),
     grayscale: bool = Form(False, description="Grayscale rendering"),
+    optimize: bool = Form(False, description="Apply additional image compression"),
     workers: int = Form(4, description="Parallel worker processes"),
 ):
     """
@@ -236,6 +239,7 @@ async def convert_pdf_json_endpoint(
                 combine=combine,
                 quality=quality,
                 grayscale=grayscale,
+                optimize=optimize,
                 workers=workers,
             )
         except Exception as exc:
@@ -244,14 +248,17 @@ async def convert_pdf_json_endpoint(
         images_payload = []
         target_list = [results] if isinstance(results, Path) else results
 
+        fmt_lower = format.lower()
+        mime_subtype = "jpeg" if fmt_lower in ("jpg", "jpeg") else fmt_lower
+
         for img_path in target_list:
             with open(img_path, "rb") as img_file:
                 b64_str = base64.b64encode(img_file.read()).decode("utf-8")
                 images_payload.append({
                     "filename": img_path.name,
-                    "format": format.lower(),
+                    "format": fmt_lower,
                     "size_bytes": img_path.stat().st_size,
-                    "base64": f"data:image/{format.lower()};base64,{b64_str}",
+                    "base64": f"data:image/{mime_subtype};base64,{b64_str}",
                 })
 
         return JSONResponse(content={

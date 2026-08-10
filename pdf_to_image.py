@@ -142,20 +142,6 @@ def _render_and_save_worker(
         doc.close()
 
 
-def _render_and_bytes_worker(
-    pdf_path_str: str, idx: int, dpi: int, grayscale: bool,
-) -> tuple:
-    """Standalone worker for combine mode: returns (idx, png_bytes)."""
-    doc = pymupdf.open(pdf_path_str)
-    try:
-        zoom = dpi / 72
-        matrix = pymupdf.Matrix(zoom, zoom)
-        pix = _render_page(doc, idx, matrix, grayscale, "png")
-        return idx, pix.tobytes("png")
-    finally:
-        doc.close()
-
-
 def _validate_and_clamp_params(dpi: int, workers: int, quality: int) -> tuple[int, int, int]:
     """Validate and clamp numeric parameters to safe operational bounds across CLI, Module, and REST API."""
     if not isinstance(dpi, int) or dpi < 36 or dpi > 600:
