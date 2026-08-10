@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf-to-images-cli"
-version = "1.0.2"
+version = "1.0.3"
 description = "High-performance PDF page to image converter with CLI, parallel rendering, and FastAPI web microservice."
 readme = "README.md"
 authors = [{ name = "ezManish" }]
@@ -43,7 +43,6 @@ all = [
 
 [project.scripts]
 pdf-to-image = "pdf_to_image:main"
-pdf2pix = "pdf_to_image:main"
 
 [tool.setuptools]
 py-modules = ["pdf_to_image", "api", "benchmark", "guide_text"]

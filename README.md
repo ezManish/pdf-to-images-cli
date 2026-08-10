@@ -29,7 +29,7 @@ High-performance Python package, CLI utility, and FastAPI REST microservice for 
 ## Features
 
 - **Parallel Processing**: Multi-process rendering engine (`--workers N`) yielding up to **5.4x+ speedup** on multi-page PDF documents.
-- **Pip Installable**: Standalone executable CLI commands (`pdf-to-image` and `pdf2pix`).
+- **Pip Installable**: Standalone executable CLI command (`pdf-to-image`).
 - **Production FastAPI SaaS Microservice**: Ready-to-deploy REST API endpoints (`/convert`, `/convert/json`, `/health`) with interactive OpenAPI documentation.
 - **Multi-Format Export**: Native rendering for PNG, JPEG, WEBP, TIFF, BMP, GIF, PGM, PBM, PPM, and PAM.
 - **Page Range Filtering**: Convert targeted page subsets using intuitive range syntax (`-p "1,3,5-10"`).

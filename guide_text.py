@@ -9,7 +9,7 @@ GUIDE_TEXT = """================================================================
 pdf-to-images-cli Complete User Guide & Architectural Reference
 ================================================================================
 
-CLI Executables: pdf-to-image  |  pdf2pix
+CLI Executable: pdf-to-image
 
 OVERVIEW:
   pdf-to-images-cli converts PDF document pages into high-resolution images.

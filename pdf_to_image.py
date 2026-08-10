@@ -39,7 +39,7 @@ import pymupdf  # PyMuPDF
 from guide_text import GUIDE_TEXT
 
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 
 def get_pdf_info(pdf_path: Union[str, Path]) -> dict:

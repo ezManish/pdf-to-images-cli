@@ -83,7 +83,7 @@ def test_cli_version_flag(capsys):
         main(["--version"])
     assert exc.value.code == 0
     captured = capsys.readouterr()
-    assert "pdf-to-images-cli 1.0.2" in captured.out or "pdf-to-images-cli 1.0.2" in captured.err
+    assert "pdf-to-images-cli 1.0.3" in captured.out or "pdf-to-images-cli 1.0.3" in captured.err
 
 
 def test_parameter_validation_clamping():
