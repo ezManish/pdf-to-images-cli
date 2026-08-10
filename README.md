@@ -110,11 +110,14 @@ pdf-to-image presentation.pdf --combine --format webp
 
 ## Python API Usage
 
-Import and use `pdf_to_images` directly inside Python code bases:
+Import and use `pdf_to_image` directly inside Python applications:
 
 ```python
-from pathlib import Path
-from pdf_to_image import pdf_to_images
+from pdf_to_image import pdf_to_images, get_pdf_info
+
+# Inspect PDF metadata and page count
+info = get_pdf_info("input.pdf")
+print(f"File: {info['file_name']}, Pages: {info['page_count']}, Encrypted: {info['is_encrypted']}")
 
 # Convert PDF to per-page PNG images
 image_paths = pdf_to_images(

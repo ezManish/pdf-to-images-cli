@@ -10,8 +10,20 @@ import pytest
 from fastapi.testclient import TestClient
 
 from guide_text import GUIDE_TEXT
-from pdf_to_image import _parse_page_ranges, main, pdf_to_images, SUPPORTED_FORMATS, PILLOW_FALLBACK_FORMATS
+from pdf_to_image import _parse_page_ranges, get_pdf_info, main, pdf_to_images, SUPPORTED_FORMATS, PILLOW_FALLBACK_FORMATS
 from api import app, _sanitize_filename, MAX_FILE_SIZE_BYTES
+
+
+def test_get_pdf_info():
+    """Verify get_pdf_info metadata retrieval."""
+    sample_pdf = Path("Participation_Certificates.pdf")
+    if not sample_pdf.exists():
+        return
+    info = get_pdf_info(sample_pdf)
+    assert isinstance(info, dict)
+    assert info["file_name"] == "Participation_Certificates.pdf"
+    assert info["page_count"] > 0
+    assert info["is_encrypted"] is False
 
 
 def test_guide_text_module_loaded():
@@ -71,7 +83,7 @@ def test_cli_version_flag(capsys):
         main(["--version"])
     assert exc.value.code == 0
     captured = capsys.readouterr()
-    assert "pdf-to-images-cli 1.0.1" in captured.out or "pdf-to-images-cli 1.0.1" in captured.err
+    assert "pdf-to-images-cli 1.0.2" in captured.out or "pdf-to-images-cli 1.0.2" in captured.err
 
 
 def test_parameter_validation_clamping():

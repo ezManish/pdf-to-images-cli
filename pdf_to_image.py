@@ -39,7 +39,35 @@ import pymupdf  # PyMuPDF
 from guide_text import GUIDE_TEXT
 
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
+
+
+def get_pdf_info(pdf_path: Union[str, Path]) -> dict:
+    """
+    Retrieve document metadata, page count, and encryption status for a PDF file.
+
+    Returns:
+        dict: {'file_name': str, 'page_count': int, 'is_encrypted': bool, 'title': str, 'author': str}
+    """
+    pdf_path = Path(pdf_path)
+    if not pdf_path.is_file():
+        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+
+    doc = pymupdf.open(str(pdf_path))
+    try:
+        is_encrypted = bool(doc.is_encrypted or doc.needs_pass)
+        page_count = doc.page_count if not is_encrypted else 0
+        metadata = doc.metadata or {}
+        return {
+            "file_name": pdf_path.name,
+            "page_count": page_count,
+            "is_encrypted": is_encrypted,
+            "title": metadata.get("title", ""),
+            "author": metadata.get("author", ""),
+            "format": getattr(doc, "format", "PDF"),
+        }
+    finally:
+        doc.close()
 
 SUPPORTED_FORMATS = {"png", "jpg", "jpeg", "ppm", "pgm", "pbm", "pam"}
 PILLOW_FALLBACK_FORMATS = {"webp", "tiff", "tif", "bmp", "gif"}
