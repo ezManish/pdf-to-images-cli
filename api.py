@@ -67,13 +67,14 @@ def _verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
 
 
 def _sanitize_filename(raw_filename: Optional[str]) -> str:
-    """Sanitize upload filename to prevent path traversal vulnerability."""
+    """Sanitize upload filename to prevent path traversal vulnerability cross-platform."""
     if not raw_filename or not raw_filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only PDF files (.pdf) are supported.",
         )
-    return Path(raw_filename).name
+    normalized = raw_filename.replace("\\", "/")
+    return Path(normalized).name
 
 
 def _clamp_integer(val: int, min_val: int, max_val: int) -> int:
