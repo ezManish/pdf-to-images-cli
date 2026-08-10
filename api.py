@@ -32,14 +32,16 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Enable CORS for SaaS Web Frontends
+# Enable CORS for SaaS Web Frontends (allow_credentials must be False when allow_origins is wildcard)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB Limit
 
 
 def _cleanup_temp_file(path: Path) -> None:
@@ -49,6 +51,21 @@ def _cleanup_temp_file(path: Path) -> None:
             path.unlink()
     except Exception:
         pass
+
+
+def _sanitize_filename(raw_filename: Optional[str]) -> str:
+    """Sanitize upload filename to prevent path traversal vulnerability."""
+    if not raw_filename or not raw_filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF files (.pdf) are supported.",
+        )
+    return Path(raw_filename).name
+
+
+def _clamp_integer(val: int, min_val: int, max_val: int) -> int:
+    """Clamp integer parameters within safe operational bounds."""
+    return max(min_val, min(val, max_val))
 
 
 @app.get("/", tags=["General"])
@@ -73,29 +90,34 @@ async def convert_pdf_endpoint(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF file to convert"),
     format: str = Form("png", description="Output format (png, jpg, webp, tiff, etc)"),
-    dpi: int = Form(200, description="DPI render resolution (e.g. 150, 200, 300)"),
+    dpi: int = Form(200, description="DPI render resolution (36 to 600)"),
     pages: Optional[str] = Form(None, description="Page range string like '1,3,5-8'"),
     combine: bool = Form(False, description="Stack pages into a single vertical image"),
-    quality: int = Form(90, description="JPEG quality (1-100)"),
+    quality: int = Form(90, description="JPEG quality (1 to 100)"),
     grayscale: bool = Form(False, description="Render in grayscale"),
     optimize: bool = Form(False, description="Apply additional image compression"),
-    workers: int = Form(4, description="Parallel worker processes for fast rendering"),
+    workers: int = Form(4, description="Parallel worker processes (1 to 16)"),
 ):
     """
     Upload a PDF file and receive converted images compressed in a ZIP archive (or direct single image file if combined).
     """
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
+    safe_filename = _sanitize_filename(file.filename)
+    dpi = _clamp_integer(dpi, 36, 600)
+    workers = _clamp_integer(workers, 1, 16)
+    quality = _clamp_integer(quality, 1, 100)
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only PDF files are supported.",
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File size exceeds maximum allowed limit of 100 MB.",
         )
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
-        pdf_input_path = tmp_path / file.filename
+        pdf_input_path = tmp_path / safe_filename
         
         with open(pdf_input_path, "wb") as f:
-            content = await file.read()
             f.write(content)
 
         output_folder = tmp_path / "output"
@@ -165,18 +187,22 @@ async def convert_pdf_json_endpoint(
     SaaS API endpoint: Upload a PDF file and return base64-encoded images in JSON format.
     Ideal for direct web client rendering and backend integrations.
     """
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
+    safe_filename = _sanitize_filename(file.filename)
+    dpi = _clamp_integer(dpi, 36, 600)
+    workers = _clamp_integer(workers, 1, 16)
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only PDF files are supported.",
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File size exceeds maximum allowed limit of 100 MB.",
         )
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
-        pdf_input_path = tmp_path / file.filename
+        pdf_input_path = tmp_path / safe_filename
 
         with open(pdf_input_path, "wb") as f:
-            content = await file.read()
             f.write(content)
 
         output_folder = tmp_path / "output"
@@ -211,7 +237,7 @@ async def convert_pdf_json_endpoint(
 
         return JSONResponse(content={
             "success": True,
-            "filename": file.filename,
+            "filename": safe_filename,
             "page_count": len(images_payload),
             "images": images_payload,
         })

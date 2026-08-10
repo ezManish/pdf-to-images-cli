@@ -54,8 +54,11 @@ def _parse_page_ranges(spec: str, page_count: int) -> List[int]:
         if not chunk:
             continue
         if "-" in chunk:
-            start_s, end_s = chunk.split("-", 1)
-            start, end = int(start_s), int(end_s)
+            parts = chunk.split("-", 1)
+            try:
+                start, end = int(parts[0].strip()), int(parts[1].strip())
+            except ValueError:
+                raise ValueError(f"Invalid page range specifier '{chunk}': page numbers must be integers")
             if start > end:
                 raise ValueError(
                     f"Invalid page range '{chunk}': start ({start}) is after end ({end})"
@@ -64,7 +67,10 @@ def _parse_page_ranges(spec: str, page_count: int) -> List[int]:
                 raise ValueError(f"Invalid page range '{chunk}' for a {page_count}-page PDF")
             pages.update(range(start - 1, end))
         else:
-            p = int(chunk)
+            try:
+                p = int(chunk)
+            except ValueError:
+                raise ValueError(f"Invalid page specifier '{chunk}': page numbers must be integers")
             if p < 1 or p > page_count:
                 raise ValueError(f"Invalid page number '{p}' for a {page_count}-page PDF")
             pages.add(p - 1)
@@ -196,6 +202,8 @@ def pdf_to_images(
 
     doc = pymupdf.open(str(pdf_path))
     try:
+        if doc.is_encrypted or doc.needs_pass:
+            raise ValueError(f"PDF '{pdf_path.name}' is encrypted or password-protected.")
         page_count = doc.page_count
     finally:
         doc.close()
@@ -215,35 +223,19 @@ def pdf_to_images(
     matrix = pymupdf.Matrix(zoom, zoom)
 
     if combine:
-        # Collect PNG bytes for every page (in order), then stack once at the end.
-        results: dict[int, bytes] = {}
-        if workers > 1:
-            from concurrent.futures import ProcessPoolExecutor, as_completed
-
-            with ProcessPoolExecutor(max_workers=workers) as executor:
-                futures = {
-                    executor.submit(_render_and_bytes_worker, str(pdf_path), idx, dpi, grayscale): idx
-                    for idx in page_indices
-                }
-                done = 0
-                for future in as_completed(futures):
-                    idx, png_bytes = future.result()
-                    results[idx] = png_bytes
-                    done += 1
-                    _progress(done)
-        else:
-            doc = pymupdf.open(str(pdf_path))
-            try:
-                for done, idx in enumerate(page_indices, start=1):
-                    pix = _render_page(doc, idx, matrix, grayscale, "png")
-                    results[idx] = pix.tobytes("png")
-                    _progress(done)
-            finally:
-                doc.close()
-        if show_progress:
-            print(file=sys.stderr)
-        ordered_bytes = [results[idx] for idx in page_indices]
-        return _combine_png_bytes(ordered_bytes, out_dir, name_prefix, fmt, quality)
+        return _combine_pages_stream(
+            pdf_path=pdf_path,
+            page_indices=page_indices,
+            matrix=matrix,
+            grayscale=grayscale,
+            workers=workers,
+            out_dir=out_dir,
+            name_prefix=name_prefix,
+            fmt=fmt,
+            quality=quality,
+            show_progress=show_progress,
+            total=total,
+        )
 
     # Per-page mode: save each page as soon as it's rendered, never hold more
     # than one (or `workers`) pixmap in memory at a time.
@@ -284,10 +276,33 @@ def pdf_to_images(
     return [out_paths_by_idx[idx] for idx in page_indices]
 
 
-def _combine_png_bytes(
-    png_bytes_list: List[bytes], out_dir: Path, name_prefix: str, fmt: str, quality: int
+def _render_and_samples_worker(
+    pdf_path_str: str, idx: int, matrix_zoom: float, grayscale: bool,
+) -> tuple:
+    """Standalone worker for combine mode: returns (idx, width, height, n, samples)."""
+    doc = pymupdf.open(pdf_path_str)
+    try:
+        matrix = pymupdf.Matrix(matrix_zoom, matrix_zoom)
+        pix = _render_page(doc, idx, matrix, grayscale, "png")
+        return idx, pix.width, pix.height, pix.n, bytes(pix.samples)
+    finally:
+        doc.close()
+
+
+def _combine_pages_stream(
+    pdf_path: Path,
+    page_indices: List[int],
+    matrix: pymupdf.Matrix,
+    grayscale: bool,
+    workers: int,
+    out_dir: Path,
+    name_prefix: str,
+    fmt: str,
+    quality: int,
+    show_progress: bool,
+    total: int,
 ) -> Path:
-    """Stack pre-rendered PNG-bytes pages vertically into a single image."""
+    """Stream page renders directly into canvas without buffering all page byte arrays in memory."""
     try:
         from PIL import Image
     except ImportError as exc:
@@ -295,21 +310,71 @@ def _combine_png_bytes(
             "Combining pages into one image needs Pillow. Install it with: pip install pillow"
         ) from exc
 
-    pil_images = [Image.open(io.BytesIO(b)) for b in png_bytes_list]
-    total_width = max(img.width for img in pil_images)
-    total_height = sum(img.height for img in pil_images)
+    doc = pymupdf.open(str(pdf_path))
+    try:
+        dims = []
+        for idx in page_indices:
+            page = doc.load_page(idx)
+            rect = page.rect
+            w = int(rect.width * matrix.a)
+            h = int(rect.height * matrix.d)
+            dims.append((w, h))
+    finally:
+        doc.close()
 
-    mode = "RGB" if fmt in ("jpg", "jpeg") else "RGBA"
-    combined = Image.new(mode, (total_width, total_height), "white")
+    total_width = max(w for w, h in dims)
+    total_height = sum(h for w, h in dims)
 
-    y_offset = 0
-    for img in pil_images:
-        if mode == "RGB" and img.mode in ("RGBA", "LA"):
-            img = img.convert("RGB")
-        elif img.mode == "L" and mode == "RGBA":
-            img = img.convert("RGBA")
-        combined.paste(img, (0, y_offset))
-        y_offset += img.height
+    y_offsets = {}
+    curr_y = 0
+    for idx, (w, h) in zip(page_indices, dims):
+        y_offsets[idx] = curr_y
+        curr_y += h
+
+    target_mode = "RGB" if fmt in ("jpg", "jpeg") else "RGBA"
+    combined = Image.new(target_mode, (total_width, total_height), "white")
+
+    def _progress(done: int) -> None:
+        if show_progress:
+            print(f"Processing page {done}/{total}...", end="\r", file=sys.stderr)
+
+    if workers > 1:
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(_render_and_samples_worker, str(pdf_path), idx, matrix.a, grayscale): idx
+                for idx in page_indices
+            }
+            done = 0
+            for future in as_completed(futures):
+                idx, w, h, n, samples = future.result()
+                mode = _PIXMAP_N_TO_PIL_MODE.get(n, "RGB")
+                page_img = Image.frombytes(mode, (w, h), samples)
+                if target_mode == "RGB" and page_img.mode in ("RGBA", "LA"):
+                    page_img = page_img.convert("RGB")
+                elif page_img.mode == "L" and target_mode == "RGBA":
+                    page_img = page_img.convert("RGBA")
+                combined.paste(page_img, (0, y_offsets[idx]))
+                done += 1
+                _progress(done)
+    else:
+        doc = pymupdf.open(str(pdf_path))
+        try:
+            for done, idx in enumerate(page_indices, start=1):
+                pix = _render_page(doc, idx, matrix, grayscale, "png")
+                page_img = _pixmap_to_pil(pix)
+                if target_mode == "RGB" and page_img.mode in ("RGBA", "LA"):
+                    page_img = page_img.convert("RGB")
+                elif page_img.mode == "L" and target_mode == "RGBA":
+                    page_img = page_img.convert("RGBA")
+                combined.paste(page_img, (0, y_offsets[idx]))
+                _progress(done)
+        finally:
+            doc.close()
+
+    if show_progress:
+        print(file=sys.stderr)
 
     out_name = f"{name_prefix}_combined.{fmt if fmt != 'jpeg' else 'jpg'}"
     out_path = out_dir / out_name
@@ -318,135 +383,18 @@ def _combine_png_bytes(
     return out_path
 
 
-GUIDE_TEXT = """================================================================================
-pdf-to-images-cli Complete User Guide & Architectural Reference
-================================================================================
+def _load_guide_text() -> str:
+    """Load user guide from external guide.txt file with fallback."""
+    try:
+        guide_path = Path(__file__).parent / "guide.txt"
+        if guide_path.is_file():
+            return guide_path.read_text(encoding="utf-8")
+    except Exception:
+        pass
+    return "pdf-to-images-cli: Run 'pdf-to-image --help' for CLI parameter descriptions."
 
-CLI Executables: pdf-to-image
 
-OVERVIEW:
-  pdf-to-images-cli converts PDF document pages into high-resolution images.
-  Powered by PyMuPDF (fitz) for sub-millisecond C-level vector rendering and
-  Pillow for advanced format encoding. Supports multi-core CPU process scaling,
-  vertical image stitching, and a REST API backend.
-
---------------------------------------------------------------------------------
-1. PARAMETER REFERENCE & HOW THEY WORK
---------------------------------------------------------------------------------
-
-  pdf (Positional)
-    Path to the source PDF file (e.g., document.pdf). Required for conversion.
-
-  -f, --format {png, jpg, webp, tiff, bmp, ppm, pgm}
-    Specifies the output image encoding format.
-    - PNG / WEBP / TIFF: Support 32-bit RGBA transparency.
-    - JPG / JPEG: Lossy compression, RGB/Grayscale, adjustable with --quality.
-    - BMP / PPM / PGM: Uncompressed raw bitmap formats for graphics tools.
-    Default: png
-
-  -d, --dpi DPI (Resolution)
-    Controls render resolution in Dots Per Inch (DPI).
-    - 72 DPI  : Fast draft / preview mode.
-    - 150 DPI : Screen display & web publishing.
-    - 200 DPI : Default balancing resolution, speed, and clarity.
-    - 300 DPI : High-resolution print & OCR engine input.
-    - 600 DPI : Ultra-high archival graphics resolution.
-    Default: 200
-
-  -o, --output-dir DIR
-    Target parent directory for exported images.
-    By default, images are written into a subfolder named after the PDF:
-      output/<pdf_name>/<pdf_name>_p001.png
-    Default: output/<pdf_name>
-
-  -p, --pages PAGES
-    1-indexed page range specification. Accepts commas and hyphenated ranges.
-    Examples:
-      --pages "1"       -> Page 1 only
-      --pages "1,3,5"   -> Pages 1, 3, and 5
-      --pages "1-5,8"   -> Pages 1 through 5, and page 8
-    Default: All pages in document
-
-  -c, --combine (Vertical Image Stacking)
-    Instead of per-page images, stitches all selected pages into a single
-    contiguous vertical image. Useful for long document previews & web pages.
-
-  -w, --workers WORKERS (Parallel Acceleration)
-    Number of parallel CPU worker processes (ProcessPoolExecutor).
-    Each worker opens an isolated C-level PyMuPDF document handle, eliminating
-    GIL contention and delivering up to 5.4x+ speedup on multi-core CPUs.
-    Default: 1 (Sequential)
-
-  -q, --quality QUALITY (1-100)
-    Sets JPEG encoding quality rating from 1 (lowest quality, smallest file) to
-    100 (highest quality, largest file). Ignored for PNG/lossless formats.
-    Default: 90
-
-  -g, --grayscale
-    Renders pages into single-channel 8-bit grayscale (csGRAY).
-    Reduces output file sizes by ~60% and memory footprint by 75%.
-
-  --optimize
-    Enables extra image compression passes (PNG zlib strategy / WebP lossy).
-    Produces smaller files at the cost of slightly higher CPU encode time.
-
-  --prefix PREFIX
-    Custom filename prefix for exported page images.
-    Default: PDF filename stem (e.g. document_p001.png)
-
-  --progress
-    Prints real-time progress indicators ("Processing page X/N...") to stderr.
-
---------------------------------------------------------------------------------
-2. COMMON CLI COMMAND EXAMPLES
---------------------------------------------------------------------------------
-
-  * Standard Conversion:
-      pdf-to-image document.pdf
-
-  * High-DPI JPEG Export (300 DPI, Quality 95):
-      pdf-to-image contract.pdf -f jpg -d 300 -q 95
-
-  * Extract Pages 1, 3, and 5-10:
-      pdf-to-image report.pdf --pages "1,3,5-10"
-
-  * Multi-Core Parallel Scaling (8 Workers):
-      pdf-to-image large_book.pdf --workers 8 --progress
-
-  * Vertical Image Stacking:
-      pdf-to-image presentation.pdf --combine --format webp
-
-  * Grayscale OCR Optimization:
-      pdf-to-image scan.pdf --grayscale --dpi 300 --optimize
-
---------------------------------------------------------------------------------
-3. FASTAPI REST MICROSERVICE
---------------------------------------------------------------------------------
-
-  Launch SaaS REST server:
-    uvicorn api:app --reload --port 8000
-
-  Endpoints:
-    GET  /health        -> Healthcheck monitoring
-    POST /convert       -> Upload PDF -> Stream ZIP file download
-    POST /convert/json  -> Upload PDF -> Return JSON with Base64 images array
-
-  Interactive OpenAPI Docs: http://localhost:8000/docs
-
---------------------------------------------------------------------------------
-4. PYTHON MODULE IMPORT
---------------------------------------------------------------------------------
-
-  from pdf_to_image import pdf_to_images
-
-  # Per-page list of Path objects
-  paths = pdf_to_images("document.pdf", fmt="png", dpi=200, workers=4)
-
-  # Stitched single combined image Path
-  combined = pdf_to_images("document.pdf", combine=True, fmt="jpg")
-
-================================================================================
-"""
+GUIDE_TEXT = _load_guide_text()
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

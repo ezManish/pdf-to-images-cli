@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyMuPDF](https://img.shields.io/badge/Powered%20By-PyMuPDF-ff69b4.svg)](https://pymupdf.readthedocs.io/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![CI Pipeline](https://github.com/ezManish/pdf-to-images-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/ezManish/pdf-to-images-cli/actions)
 
 High-performance Python package, CLI utility, and FastAPI REST microservice for converting PDF pages into high-resolution images (PNG, JPG, WEBP, TIFF, BMP) with multi-core parallel processing acceleration.
 
@@ -30,7 +31,7 @@ High-performance Python package, CLI utility, and FastAPI REST microservice for 
 - **Parallel Processing**: Multi-process rendering engine (`--workers N`) yielding up to **5.4x+ speedup** on multi-page PDF documents.
 - **Pip Installable**: Standalone executable CLI commands (`pdf-to-image` and `pdf2pix`).
 - **Production FastAPI SaaS Microservice**: Ready-to-deploy REST API endpoints (`/convert`, `/convert/json`, `/health`) with interactive OpenAPI documentation.
-- **Multi-Format Export**: Native rendering for PNG, JPEG, WEBP, TIFF, BMP, PGM, PBM, PPM, and PAM.
+- **Multi-Format Export**: Native rendering for PNG, JPEG, WEBP, TIFF, BMP, GIF, PGM, PBM, PPM, and PAM.
 - **Page Range Filtering**: Convert targeted page subsets using intuitive range syntax (`-p "1,3,5-10"`).
 - **Vertical Image Stacking**: Stitches entire PDF documents into a single contiguous vertical composite image with `--combine`.
 - **Execution Timing & Statistics**: Automatic CLI throughput metrics (`pages/sec`) and execution timing reports.
@@ -53,8 +54,8 @@ pip install pdf-to-images-cli
 Install locally with full FastAPI REST backend support:
 
 ```bash
-git clone https://github.com/your-username/Pdf2Pix.git
-cd Pdf2Pix
+git clone https://github.com/ezManish/pdf-to-images-cli.git
+cd pdf-to-images-cli
 pip install -e .[all]
 ```
 
@@ -192,7 +193,8 @@ curl.exe -X POST "http://localhost:8000/convert/json" \
 | `.webp` | RGB / RGBA | Yes | Next-gen web optimization |
 | `.tiff` / `.tif` | RGB / RGBA | Yes | Print publishing & archiving |
 | `.bmp` | RGB | No | Uncompressed bitmap compatibility |
-| `.ppm` / `.pgm` | RGB / Grayscale | No | Linux graphics toolchains |
+| `.gif` | Palette / RGB | Yes | Animated & indexed color compatibility |
+| `.ppm` / `.pgm` / `.pam` | RGB / Grayscale | No | Linux graphics toolchains & netpbm |
 
 ---
 
